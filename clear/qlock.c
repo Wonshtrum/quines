@@ -1,6 +1,11 @@
-int printf(),usleep(),time();
-// use X and Y as direction, O as original X
-int x,y,X,Y,O;
+_escaped = 1;
+_width = 80;
+
+char *ctime(),c,*t,*z,*s,*S="#";
+
+int printf(),sleep(),time();
+int x,y;
+// bitmap font for characters 0 to 9 and ':'
 int f[] = {31599,19812,14479,31207,23524,29411,29679,30866,31727,31719,1040};
 
 void p(char c) {
@@ -11,28 +16,25 @@ void p(char c) {
 	} else {
 		printf("%c", c);
 	}
-	if (++x == 80+O) {
+	if (++x == 80) {
 		p('\n');
-		x = O;
+		x = 0;
 		y++;
 	}
 }
 
-int main() {
-x = 0;
-y = 0;
-O = 0;
-X = -1;
-Y = -1;
-for(;;) {
+int main() { for(;;) {
 	unsigned long n;
 	time(&n);
+	// get time formated as a string "DayName Month Day HH:MM:SS Year"
 	t = ctime(&n);
 	int spaces = 0;
+	// skip 3 spaces to get the start "HH:MM:SS"
 	while (spaces < 3) {
 		if (*t == ' ') spaces++;
 		t++;
 	}
+	// convert ASCII codes to corresponding numbers, inserting 10 as ':'
 	t[0] -= '0';
 	t[1] -= '0';
 	t[2] = 10;
@@ -43,10 +45,11 @@ for(;;) {
 	t[7] -= '0';
 
 	z = s = S;
+	x = y = 0;
 	for (;c=*s++;) {
 		if (c == 35) {
 			for (;c=*z++;) {
-				if (x == 79+O) {
+				if (x == 79) {
 					p('"');
 					p('"');
 				}
@@ -60,19 +63,7 @@ for(;;) {
 		}
 	}
 
-	// reset coordinates and add direction
-	O += X;
-	x = O;
-	y -= 20;
-	y += Y;
-	// bounce
-	if (x >= 0 || x < -41) {
-		X *= -1;
-	}
-	if (y >= 0 || y < -15) {
-		Y *= -1;
-	}
-
-	printf("\n\e[21A");
-	usleep(200000);
+	// move cursor to start
+	printf("\n\e[17A");
+	sleep(1);
 }}

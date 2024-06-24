@@ -1,3 +1,9 @@
+_escaped = 1;
+_width = 80;
+_post = " MIT Copyright (c) Wonshtrum // Inspired by Tsoding";
+
+char *ctime(),c,*t,*z,*s,*S="#";
+
 int f[] = {393,-12402,-1859,1,-12281,-16663,489,-21823,521,9,-30166},x,y,O,X,Y,n[2],printf(),time(),usleep();
 
 int p(int c) {

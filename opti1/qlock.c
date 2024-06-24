@@ -1,3 +1,9 @@
+_escaped = 1;
+_width = 80;
+_post = " MIT Copyright (c) Wonshtrum // Inspired by Tsoding";
+
+char *ctime(),c,*t,*z,*s,*S="#";
+
 // we can merge declaration of integers and functions returning an integer... yes
 // the font bitmap is stored bits reversed (this avoids the "[12-...]") and minus 31206 to save 5 characters:
 //        {31599,19812,14479,31207,23524,29411,29679,30866,31727,31719,1040}-12
@@ -30,7 +36,7 @@ int main() {
 		for(c=3;c-=*t++==32;z=s=S);
 		// set ':' delimters
 		t[2] = t[5] = 58;
-		// reset x (y is already 0)
+		// reset coordinates
 		for(x=y=0; c=*s++;)
 			if (c-35) p(c);
 			else for(;c=*z++; x-79 || p(34)+p(34))

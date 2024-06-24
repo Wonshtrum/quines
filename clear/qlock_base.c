@@ -1,3 +1,8 @@
+_escaped = 1;
+_width = 80;
+
+char*z,*s,c,*S="#";
+
 // forward declare functions
 int printf();
 // global variables
