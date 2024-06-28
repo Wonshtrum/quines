@@ -1,6 +1,4 @@
 nob
 nob.old
-build/packed.c
-build/qlock.c
-build/qlock
+build
 bin*

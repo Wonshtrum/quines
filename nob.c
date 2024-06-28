@@ -12,6 +12,7 @@ typedef struct FileInfo {
 	bool success;
 	char *content;
 	bool escaped;
+	bool skip_post;
 	int width;
 	int pad;
 	int pre;
@@ -21,7 +22,7 @@ typedef struct FileInfo {
 } FileInfo;
 const FileInfo FILE_INFO_ERROR = {0};
 
-bool build_exe(Nob_Cmd *cmd, const char *input_path, const char *output_path) {
+bool build_bin(Nob_Cmd *cmd, const char *input_path, const char *output_path) {
 	cmd->count = 0;
 	// nob_cmd_append(cmd, "gcc", "-Wall", "-Wextra");
 	nob_cmd_append(cmd, "gcc", "-w");
@@ -32,6 +33,8 @@ bool build_exe(Nob_Cmd *cmd, const char *input_path, const char *output_path) {
 
 void wrapped_output(FILE *output, int *col, char *string, int length, int wrap, bool escaped) {
 	for (int i = 0; i < length; i++) {
+		if (string[i] == '\n')
+			continue;
 		fprintf(output, "%c", string[i]);
 		*col += 1;
 		if (escaped && *col >= wrap - 1) {
@@ -44,7 +47,7 @@ void wrapped_output(FILE *output, int *col, char *string, int length, int wrap, 
 	}
 }
 
-bool compile_quine_blob(FileInfo info, const char *input_path, const char *output_path) {
+bool build_pck(FileInfo info, const char *input_path, const char *output_path) {
 	Nob_String_Builder sb = {0};
 	if (!nob_read_entire_file(input_path, &sb)) return false;
 
@@ -100,10 +103,10 @@ bool compile_quine_blob(FileInfo info, const char *input_path, const char *outpu
 	int auto_pad = 0;
 	if (info.pad == 0) {
 		auto_pad = W - (2 + col + info.post.len) % W;
-		for (int i = 0; i < auto_pad; i++) fprintf(output, "/");
-		col += auto_pad;
+		for (int i = 0; i < auto_pad; i++)
+			wrapped_output(output, &col, "/", 1, W, true);
 	}
-	wrapped_output(output, &col, info.post.str, info.post.len, W, false);
+	wrapped_output(output, &col, info.post.str, info.post.len, W, true);
 	wrapped_output(output, &col, "\";", 2, W, false);
 	fprintf(output, "%.*s", sb.count - info.start, sb.items + info.start);
 	for (int i = 0; i < sb.count; i++) {
@@ -112,14 +115,15 @@ bool compile_quine_blob(FileInfo info, const char *input_path, const char *outpu
 			col = 0;
 		}
 	}
-	for (int i = 0; i < auto_pad; i++) {
-		wrapped_output(output, &col, "/", 1, W, false);
+	if (!info.skip_post) {
+		for (int i = 0; i < auto_pad; i++)
+			wrapped_output(output, &col, "/", 1, W, false);
+		wrapped_output(output, &col, info.post.str, info.post.len, W, false);
 	}
-	wrapped_output(output, &col, info.post.str, info.post.len, W, false);
 	fprintf(output, "\n");
 
 	fclose(output);
-	nob_log(NOB_INFO, "Generated %s", output_path);
+	//nob_log(NOB_INFO, "Generated %s", output_path);
 	return success;
 }
 
@@ -152,7 +156,7 @@ FileInfo unexpected_token(Slice token, char *expected) {
 	return FILE_INFO_ERROR;
 }
 
-FileInfo format_tokens(const char *input_path, const char *output_path) {
+FileInfo build_fmt(const char *input_path, const char *output_path) {
 	Nob_String_Builder sb = {0};
 	if (!nob_read_entire_file(input_path, &sb)) return FILE_INFO_ERROR;
 
@@ -180,6 +184,9 @@ FileInfo format_tokens(const char *input_path, const char *output_path) {
 		if (cmp_str(key, "_escaped")) {
 			if (l.token != 258) return unexpected_token(val, "integer");
 			info.escaped = l.int_number != 0;
+		} else if (cmp_str(key, "_skip_post")) {
+			if (l.token != 258) return unexpected_token(val, "integer");
+			info.skip_post = l.int_number != 0;
 		} else if (cmp_str(key, "_width")) {
 			if (l.token != 258) return unexpected_token(val, "integer");
 			info.width = l.int_number;
@@ -197,7 +204,7 @@ FileInfo format_tokens(const char *input_path, const char *output_path) {
 		}
 		if (!stb_c_lexer_get_token(&l)) return FILE_INFO_ERROR;
 		if (l.token != 59) return unexpected_token(slice_from_lexer(&l), "`;`");
-		nob_log(NOB_INFO, "FileInfo::%.*s = %.*s", key.len, key.str, val.len, val.str);
+		//nob_log(NOB_INFO, "FileInfo::%.*s = %.*s", key.len, key.str, val.len, val.str);
 	}
 
 	int W = info.width;
@@ -245,11 +252,37 @@ FileInfo format_tokens(const char *input_path, const char *output_path) {
 	}
 
 	fclose(output);
-	nob_log(NOB_INFO, "FileInfo::_pre = %d", info.pre);
-	nob_log(NOB_INFO, "FileInfo::_start = %d", info.start);
-	nob_log(NOB_INFO, "Generated %s: %d bytes", output_path, cursor);
+	//nob_log(NOB_INFO, "FileInfo::_pre = %d", info.pre);
+	//nob_log(NOB_INFO, "FileInfo::_start = %d", info.start);
+	//nob_log(NOB_INFO, "Generated %s: %d bytes", output_path, cursor);
 	info.content = sb.items;
 	return info;
+}
+
+bool compile(Nob_Cmd *cmd, const char *src, char *pck, char *bin) {
+	FileInfo info = build_fmt(src, "./build/fmt.c");
+	if (!info.success) return false;
+	if (!build_pck(info, "./build/fmt.c", pck)) return false;
+	if (!build_bin(cmd, pck, bin)) return false;
+	//nob_log(NOB_INFO, "Generated %s", bin);
+	return true;
+}
+
+bool is_src(int len, const char *name, char *src, char *pck, char *bin) {
+	int i;
+	for (i = 0; i < 1024-len && name[i]; i++) {
+		if (i < 4) {
+			if (name[i] != "src_"[i]) return false;
+		} else {
+			src[len+i] = name[i];
+			pck[len+i] = name[i];
+			bin[len+i] = name[i];
+		}
+	}
+	if (i < 4 || i >= 1024-len) return false;
+	if (name[i-1] != 'c' || name[i-2] != '.') return false;
+	src[len+i] = pck[len+i] = bin[len+i-2] = 0;
+	return true;
 }
 
 int main(int argc, char **argv) {
@@ -262,10 +295,33 @@ int main(int argc, char **argv) {
 	if (!nob_mkdir_if_not_exists("./build/")) return 1;
 
 	Nob_Cmd cmd = {0};
-	FileInfo info = format_tokens(argv[1], "./build/packed.c");
-	if (!info.success) return 1;
-	if (!compile_quine_blob(info, "./build/packed.c", "./build/qlock.c")) return 1;
-	if (!build_exe(&cmd, "./build/qlock.c", "./build/qlock")) return 1;
+
+	if (nob_get_file_type(argv[1]) == NOB_FILE_DIRECTORY) {
+		static char src[1024], pck[1024], bin[1024];
+		int i;
+		for (i = 0; i < 1024 && argv[1][i]; i++) {
+			src[i] = pck[i] = bin[i] = argv[1][i];
+		}
+		if (i >= 1000) return 1;
+		if (argv[1][i-1] != '/') {
+			src[i] = pck[i] = bin[i] = '/';
+			i++;
+		}
+		int len = i;
+		memcpy(src+i, "src_", 4);
+		memcpy(pck+i, "pck_", 4);
+		memcpy(bin+i, "bin_", 4);
+		Nob_File_Paths children = {0};
+		if (!nob_read_entire_dir(argv[1], &children)) return 1;
+		for (i = 0; i < children.count; i++) {
+			if (is_src(len, children.items[i], src, pck, bin)) {
+				nob_log(NOB_INFO, "Compiling: %s", src);
+				if (!compile(&cmd, src, pck, bin)) return 1;
+			}
+		}
+	} else {
+		if (compile(&cmd, argv[1], "./build/pck.c", "./build/bin")) return 1;
+	}
 
 	return 0;
 }
