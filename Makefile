@@ -5,7 +5,8 @@ all: nob
 	./nob qlock_clear
 	./nob qlock_opti1
 	./nob qlock_opti2
-	./nob gol_opti
+	./nob gol
+	./nob badapple
 
 nob: nob.c nob.h stb_c_lexer.h
 	gcc -o nob nob.c
@@ -18,5 +19,7 @@ clean:
 	rm -f qlock_opti1/bin_*
 	rm -f qlock_opti2/pck_*
 	rm -f qlock_opti2/bin_*
-	rm -f gol_opti/pck_*
-	rm -f gol_opti/bin_*
+	rm -f gol/pck_*
+	rm -f gol/bin_*
+	rm -f badapple/pck_*
+	rm -f badapple/bin_*

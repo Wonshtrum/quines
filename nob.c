@@ -13,10 +13,13 @@ typedef struct FileInfo {
 	char *content;
 	bool escaped;
 	bool skip_post;
+	bool no_comments;
+	bool mergeable_nl;
 	int width;
 	int pad;
 	int pre;
 	int start;
+	int end;
 	Slice data;
 	Slice post;
 } FileInfo;
@@ -70,7 +73,7 @@ bool build_pck(FileInfo info, const char *input_path, const char *output_path) {
 	}
 
 	bool success = true;
-	for (int i = info.start; i < sb.count; ++i) {
+	for (int i = info.start; i < info.end; ++i) {
 		char c = sb.items[i];
 		switch (c) {
 		case '\n':
@@ -103,6 +106,7 @@ bool build_pck(FileInfo info, const char *input_path, const char *output_path) {
 	int auto_pad = 0;
 	if (info.pad == 0) {
 		auto_pad = W - (2 + col + info.post.len) % W;
+		// FIXME: auto pad is broken if it wraps
 		for (int i = 0; i < auto_pad; i++)
 			wrapped_output(output, &col, "/", 1, W, true);
 	}
@@ -170,7 +174,7 @@ FileInfo build_fmt(const char *input_path, const char *output_path) {
 	info.width = 80;
 	info.success = true;
 	stb_lexer l = {0};
-	static char string_store[1024];
+	static char string_store[8192];
 	stb_c_lexer_init(&l, sb.items, sb.items + sb.count, string_store, NOB_ARRAY_LEN(string_store));
 
 	while (stb_c_lexer_get_token(&l)) {
@@ -187,6 +191,12 @@ FileInfo build_fmt(const char *input_path, const char *output_path) {
 		} else if (cmp_str(key, "_skip_post")) {
 			if (l.token != 258) return unexpected_token(val, "integer");
 			info.skip_post = l.int_number != 0;
+		} else if (cmp_str(key, "_no_comments")) {
+			if (l.token != 258) return unexpected_token(val, "integer");
+			info.no_comments = l.int_number != 0;
+		} else if (cmp_str(key, "_mergeable_nl")) {
+			if (l.token != 258) return unexpected_token(val, "integer");
+			info.mergeable_nl = l.int_number != 0;
 		} else if (cmp_str(key, "_width")) {
 			if (l.token != 258) return unexpected_token(val, "integer");
 			info.width = l.int_number;
@@ -212,8 +222,11 @@ FileInfo build_fmt(const char *input_path, const char *output_path) {
 	int x = 0;
 	int sep = 0;
 	int prev_token = 0;
+	Slice token;
 	while (cursor == 0 || stb_c_lexer_get_token(&l)) {
-		Slice token = slice_from_lexer(&l);
+		int n = l.where_lastchar - l.where_firstchar + 1;
+		sep = (is_unconcatable(prev_token) && is_unconcatable(l.token) && (x || info.mergeable_nl)) ? 1 : 0;
+		token = slice_from_lexer(&l);
 		if (l.token == 261 && token.str[0] == '#') {
 			info.pre = cursor;
 			fprintf(output, "\"#\";\n");
@@ -223,17 +236,24 @@ FileInfo build_fmt(const char *input_path, const char *output_path) {
 			cursor += 5 + info.pad;
 			info.start = cursor;
 			continue;
+		} else if (cmp_str(token, "_stop")) {
+			info.end = cursor;
+			continue;
 		}
-		int n = l.where_lastchar - l.where_firstchar + 1;
-		sep = (is_unconcatable(prev_token) && is_unconcatable(l.token) && x > 0) ? 1 : 0;
 		if (x + sep + n > W) {
+			cursor += W - x + 1;
 			if (x < W - 1) {
-				for (; x < W; x++) fprintf(output, "/");
+				for (; x < W; x++) {
+					if (info.no_comments) {
+						fprintf(output, " ");
+					} else {
+						fprintf(output, "/");
+					}
+				}
 			} else {
 				fprintf(output, " ");
 			}
 			fprintf(output, "\n");
-			cursor += W - x + 1;
 			x = 0;
 		} else if (sep) {
 			fprintf(output, " ");
@@ -250,6 +270,8 @@ FileInfo build_fmt(const char *input_path, const char *output_path) {
 			x = 0;
 		}
 	}
+
+	if (!info.end) info.end = cursor;
 
 	fclose(output);
 	//nob_log(NOB_INFO, "FileInfo::_pre = %d", info.pre);
@@ -289,7 +311,7 @@ int main(int argc, char **argv) {
 	NOB_GO_REBUILD_URSELF(argc, argv);
 
 	if (argc < 2) {
-		nob_log(NOB_ERROR, "Missing source file");
+		nob_log(NOB_ERROR, "Missing source file or directory");
 		return 1;
 	}
 	if (!nob_mkdir_if_not_exists("./build/")) return 1;
