@@ -1,6 +1,6 @@
 _width = 80;
-_data = "B4B'%B<8588B*'B:8,B8@$@&B8B:8B#-#";
 _pad = 52;
+_data = "B4B'%B<8588B*'B:8,B8@$@&B8B:8B#-#";
 _post = "////";
 
 char *ctime(),c,*t,*z,*s,*S="#";

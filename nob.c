@@ -28,7 +28,7 @@ const FileInfo FILE_INFO_ERROR = {0};
 bool build_bin(Nob_Cmd *cmd, const char *input_path, const char *output_path) {
 	cmd->count = 0;
 	// nob_cmd_append(cmd, "gcc", "-Wall", "-Wextra");
-	nob_cmd_append(cmd, "gcc", "-w");
+	nob_cmd_append(cmd, "gcc", "-w", "-lm", "-std=c11");
 	nob_cmd_append(cmd, "-o", output_path);
 	nob_cmd_append(cmd, input_path);
 	return nob_cmd_run_sync(*cmd);
